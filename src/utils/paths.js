@@ -10,7 +10,17 @@ function get9RouterDbDir() {
     const appData = process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming");
     return path.join(appData, "9router", "db");
   }
-  return path.join(os.homedir(), ".config", "9router", "db");
+  // Linux/macOS: prefer the canonical ~/.9router/db, fall back to the
+  // legacy XDG-style ~/.config/9router/db when it exists.
+  const homeDb = path.join(os.homedir(), ".9router", "db");
+  if (fs.existsSync(homeDb)) {
+    return homeDb;
+  }
+  const xdgDb = path.join(os.homedir(), ".config", "9router", "db");
+  if (fs.existsSync(xdgDb)) {
+    return xdgDb;
+  }
+  return homeDb;
 }
 
 function get9RouterRootDir() {

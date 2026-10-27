@@ -6,14 +6,19 @@
 
 import http from "node:http";
 
-function fetchModelsFromBaseUrl(baseUrl) {
+function fetchModelsFromBaseUrl(baseUrl, apiKey) {
   return new Promise((resolve) => {
     try {
       const cleanBase = baseUrl.replace(/\/+$/, "");
       const targetUrl = cleanBase.endsWith("/models") ? cleanBase : `${cleanBase}/models`;
       const urlObj = new URL(targetUrl);
 
-      const req = http.get(urlObj, { timeout: 1500 }, (res) => {
+      const headers = {};
+      if (apiKey) {
+        headers["Authorization"] = `Bearer ${apiKey}`;
+      }
+
+      const req = http.get(urlObj, { headers, timeout: 1500 }, (res) => {
         if (res.statusCode !== 200) {
           res.resume();
           return resolve(null);
@@ -48,8 +53,9 @@ export default async function nineRouterSyncPlugin() {
       }
       const pConfig = cfg.provider["9router"];
       const baseUrl = pConfig.options?.baseURL || process.env.NINEROUTER_URL || "http://127.0.0.1:20128/v1";
+      const apiKey = pConfig.options?.apiKey || process.env.NINEROUTER_API_KEY || "";
 
-      const remoteModels = await fetchModelsFromBaseUrl(baseUrl);
+      const remoteModels = await fetchModelsFromBaseUrl(baseUrl, apiKey);
       if (!remoteModels || !remoteModels.length) {
         return;
       }

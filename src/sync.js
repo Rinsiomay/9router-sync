@@ -10,19 +10,45 @@ const {
 const { updateHermesYaml } = require("./utils/yaml-updater");
 
 /**
+ * Resolve the 9Router API key when the endpoint requires auth.
+ * Order: NINEROUTER_API_KEY env -> opencode.json provider.9router.options.apiKey -> "".
+ */
+function get9RouterApiKey(configPath) {
+  if (process.env.NINEROUTER_API_KEY) {
+    return process.env.NINEROUTER_API_KEY;
+  }
+  const cfgPath = configPath || getOpenCodeConfigPath();
+  try {
+    if (fs.existsSync(cfgPath)) {
+      const cfg = JSON.parse(fs.readFileSync(cfgPath, "utf-8"));
+      const key = cfg?.provider?.["9router"]?.options?.apiKey;
+      if (key) return key;
+    }
+  } catch (err) {
+    /* fall through to empty key */
+  }
+  return "";
+}
+
+/**
  * Fetch models and capabilities from 9Router endpoint
  */
-function fetch9RouterModels(baseUrl, timeoutMs = 3000) {
+function fetch9RouterModels(baseUrl, apiKey, timeoutMs = 3000) {
   return new Promise((resolve) => {
     try {
       const cleanBase = baseUrl.replace(/\/+$/, "");
       const targetUrl = cleanBase.endsWith("/models") ? cleanBase : `${cleanBase}/models`;
       const urlObj = new URL(targetUrl);
 
+      const headers = { "User-Agent": "9Router-Sync/1.0" };
+      if (apiKey) {
+        headers["Authorization"] = `Bearer ${apiKey}`;
+      }
+
       const req = http.get(
         urlObj,
         {
-          headers: { "User-Agent": "9Router-Sync/1.0" },
+          headers,
           timeout: timeoutMs,
         },
         (res) => {
@@ -178,7 +204,7 @@ function updateHermes(models) {
  */
 async function runSync(options = {}) {
   const baseUrl = get9RouterBaseUrl(options.port);
-  const models = await fetch9RouterModels(baseUrl);
+  const models = await fetch9RouterModels(baseUrl, get9RouterApiKey());
 
   if (!models || !models.length) {
     return {
@@ -214,6 +240,7 @@ async function runSync(options = {}) {
 
 module.exports = {
   fetch9RouterModels,
+  get9RouterApiKey,
   updateOpenCode,
   updateHermes,
   runSync,

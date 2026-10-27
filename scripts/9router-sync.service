@@ -1,0 +1,15 @@
+[Unit]
+Description=9Router-Sync — model catalog synchronizer (9Router -> OpenCode/Hermes)
+Documentation=https://github.com/Rinsiomay/9router-sync
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=__NODE__ __REPO__/bin/9router-sync.js --watch
+WorkingDirectory=__REPO__
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=default.target

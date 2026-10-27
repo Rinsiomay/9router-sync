@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
 
-const { updateOpenCode } = require("../src/sync");
+const { updateOpenCode, get9RouterApiKey, fetch9RouterModels } = require("../src/sync");
 const { updateHermesYaml } = require("../src/utils/yaml-updater");
 const paths = require("../src/utils/paths");
 
@@ -124,4 +124,68 @@ providers:
   console.log("[PASS] Test 5: Watcher event filter and null-safety validation");
 }
 
-console.log("\nAll 5 tests passed successfully.\n");
+// Test 6: Linux DB path detection & env override
+{
+  const original = process.env.NINEROUTER_DB_DIR;
+  delete process.env.NINEROUTER_DB_DIR;
+  const dbDir = paths.get9RouterDbDir();
+  if (process.platform === "linux") {
+    assert.ok(
+      dbDir.endsWith(path.join(".9router", "db")) ||
+        dbDir.endsWith(path.join(".config", "9router", "db")),
+      `Linux db dir must use ~/.9router/db or ~/.config/9router/db, got ${dbDir}`
+    );
+  }
+
+  process.env.NINEROUTER_DB_DIR = "/custom/db/path";
+  assert.strictEqual(paths.get9RouterDbDir(), path.resolve("/custom/db/path"));
+  if (original === undefined) delete process.env.NINEROUTER_DB_DIR;
+  else process.env.NINEROUTER_DB_DIR = original;
+  console.log("[PASS] Test 6: Linux DB path detection and env override");
+}
+
+// Test 7: API key resolution order (env wins over opencode.json)
+(async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "9r-test-"));
+  const tmpJson = path.join(tmpDir, "opencode.json");
+  fs.writeFileSync(
+    tmpJson,
+    JSON.stringify({ provider: { "9router": { options: { apiKey: "from-file" } } } }),
+    "utf-8"
+  );
+
+  delete process.env.NINEROUTER_API_KEY;
+  assert.strictEqual(get9RouterApiKey(tmpJson), "from-file", "Should read key from opencode.json");
+
+  process.env.NINEROUTER_API_KEY = "from-env";
+  assert.strictEqual(get9RouterApiKey(tmpJson), "from-env", "Env var should take precedence");
+  delete process.env.NINEROUTER_API_KEY;
+
+  const missing = path.join(tmpDir, "nope.json");
+  assert.strictEqual(get9RouterApiKey(missing), "", "Missing config yields empty key");
+
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+  console.log("[PASS] Test 7: API key resolution order");
+
+  // Test 8: Authorization header sent only when key present
+  const http = require("node:http");
+  const received = [];
+  const server = http.createServer((req, res) => {
+    received.push(req.headers["authorization"] || null);
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify({ data: [{ id: "m1" }] }));
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const port = server.address().port;
+  const base = `http://127.0.0.1:${port}/v1`;
+
+  await fetch9RouterModels(base, "secret-key");
+  await fetch9RouterModels(base, "");
+  server.close();
+
+  assert.strictEqual(received[0], "Bearer secret-key", "Key must be sent as Bearer token");
+  assert.strictEqual(received[1], null, "No Authorization header when key empty");
+  console.log("[PASS] Test 8: Authorization header behavior");
+
+  console.log("\nAll 8 tests passed successfully.\n");
+})();

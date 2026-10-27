@@ -37,15 +37,12 @@ function updateHermesYaml(yamlPath, models) {
     doc.set("providers", {});
   }
 
-  // Ensure 'providers.9router' exists
+  // Ensure 'providers.9router' exists.
+  // Use step-by-step doc.set (not setIn with a plain object): setIn would
+  // insert the object as a scalar value, breaking the nested setIn calls below.
   const providersNode = doc.get("providers");
   if (!providersNode.has || !providersNode.has("9router")) {
-    doc.setIn(["providers", "9router"], {
-      name: "9router",
-      base_url: "http://127.0.0.1:20128/v1",
-      discover_models: true,
-      models: {},
-    });
+    providersNode.set("9router", doc.createNode({ name: "9router", base_url: "http://127.0.0.1:20128/v1", models: {} }));
   }
 
   // Build the model map

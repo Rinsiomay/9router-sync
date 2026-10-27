@@ -4,11 +4,11 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20(x64)%20Optimized-0078D6.svg?logo=windows)]()
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-0078D6.svg)]()
 
 > [!IMPORTANT]
 > **Platform Support & Architecture Notice**  
-> This project is designed, benchmarked, and **primarily optimized for Windows (x64)** (Windows 10 & 11). The automated silent background launcher (`scripts/install-windows.ps1` via VBS/WScript) is specifically built for Windows. While the underlying Node.js CLI engine contains cross-platform path helpers, automated autostart and headless daemonization out of the box are tailored for Windows x64 environments.
+> This project is designed, benchmarked, and **primarily optimized for Windows (x64)** (Windows 10 & 11). The automated silent background launcher (`scripts/install-windows.ps1` via VBS/WScript) is specifically built for Windows. **Linux is now supported for the core workflow**: DB path detection, authenticated model fetching, and a systemd `--user` autostart service (`scripts/install-linux.sh`). macOS remains experimental.
 
 ---
 
@@ -98,17 +98,50 @@ When using local proxies like **9Router** as an OpenAI-compatible provider:
 
 ---
 
-### 🐧 / 🍎 Linux & macOS (Untested / Community PRs Welcome)
+### 🐧 Linux (Supported — Core)
+
+1. Clone the repository and run the installer:
+   ```bash
+   git clone https://github.com/Rinsiomay/9router-sync.git
+   cd 9router-sync
+   ./scripts/install-linux.sh
+   ```
+
+   **What the installer does:**
+   - Installs minimal npm dependencies (`yaml`).
+   - Copies the OpenCode JIT plugin to `~/.config/opencode/plugins/` (if OpenCode is present).
+   - Installs and enables a systemd `--user` service (`9router-sync.service`) that starts the watcher on login.
+
+2. If your 9Router endpoint requires an API key (`REQUIRE_API_KEY=true`), set it once:
+   ```bash
+   export NINEROUTER_API_KEY=sk-...   # e.g. in ~/.profile or the systemd unit environment
+   ```
+   The key resolution order is: `NINEROUTER_API_KEY` env → `provider.9router.options.apiKey` in `opencode.json` → no auth.
+
+3. To keep the watcher running after logout:
+   ```bash
+   loginctl enable-linger $USER
+   ```
+
+Uninstall:
+```bash
+./scripts/uninstall-linux.sh
+```
+
+Useful commands:
+```bash
+systemctl --user status 9router-sync    # service status
+journalctl --user -u 9router-sync -f    # live logs
+node bin/9router-sync.js --once         # manual one-time sync
+```
 
 > [!NOTE]
-> `9router-sync` was developed and verified on Windows x64. While the core Node.js script is theoretically cross-platform, daemon autostart (systemd/launchd) and default 9Router SQLite paths on Linux and macOS **have not been tested**. If you are on Linux or macOS, community pull requests and testing feedback are warmly welcome!
+> The Linux DB path defaults to `~/.9router/db` (falling back to `~/.config/9router/db`). Override with `NINEROUTER_DB_DIR` if your install differs.
 
-Manual execution (experimental):
-```bash
-npm install
-node bin/9router-sync.js --once   # One-time sync
-node bin/9router-sync.js --watch  # Watcher mode
-```
+### 🍎 macOS (Untested / Community PRs Welcome)
+
+> [!NOTE]
+> The core Node.js script is cross-platform, but daemon autostart (launchd) and default 9Router SQLite paths on macOS **have not been tested**. Community pull requests and testing feedback are warmly welcome!
 
 ---
 
@@ -135,6 +168,7 @@ Options:
 |---|---|---|
 | `NINEROUTER_URL` | Full base URL for 9Router endpoint | `http://127.0.0.1:20128/v1` |
 | `NINEROUTER_PORT` | Custom port for 9Router | `20128` |
+| `NINEROUTER_API_KEY` | API key for 9Router (sent as Bearer token) | Auto from `opencode.json` |
 | `NINEROUTER_DB_DIR` | Custom path to 9Router SQLite database folder | Auto-detected per OS |
 | `NINEROUTER_DIR` | Custom path to 9Router root data folder | Parent of `NINEROUTER_DB_DIR` |
 | `OPENCODE_CONFIG` | Custom path to `opencode.json` | `~/.config/opencode/opencode.json` |
@@ -159,12 +193,17 @@ The test suite validates:
 
 ## 🗑️ Uninstallation
 
-### Windows
-Run the uninstaller script:
+### WindowsRun the uninstaller script:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-windows.ps1
 ```
 This stops the active watcher daemon, removes the Windows Startup launcher (`9Router_ModelSync.vbs`), deletes the OpenCode JIT plugin, and clears lock files.
+
+### Linux
+```bash
+./scripts/uninstall-linux.sh
+```
+This stops and disables the systemd `--user` service, removes the unit file, deletes the OpenCode JIT plugin, and clears lock files.
 
 ---
 
